@@ -3,10 +3,11 @@ from schedtk.taskgraph import TaskGraph
 from schedtk import Worker, Simulator
 from schedtk.connectors import SimpleConnector
 from schedtk.generators import random_levels
-from schedtk.schedulers import RandomAssignScheduler
+from schedtk.schedulers import RandomAssignScheduler, BlevelGtScheduler, RandomGtScheduler
 
 import random
 import numpy as np
+import pandas as pd
 
 
 def run_single_instance(task_graph, n_workers, scheduler):
@@ -29,23 +30,52 @@ def make_graph():
 
 
 def benchmark_scheduler(task_graph, scheduler_class, n_workers, count):
-    return np.array(
-            [run_single_instance(task_graph, n_workers, scheduler_class())
+    data = np.array(
+        [run_single_instance(task_graph, n_workers, scheduler_class())
             for _ in range(count)])
+    average = np.average(data)
+    std = data.std()
+    minimum = data.min()
+    return (minimum, average, std)
 
 
 def main():
     n_workers = 3
 
-    graphs = [make_graph() for _ in range(1)]
+    schedulers = [
+        ("srandom", RandomAssignScheduler, 20),
+        ("qrandom", RandomGtScheduler, 20),
+        ("blevel1", lambda: BlevelGtScheduler(False), 1),
+        ("blevel2", lambda: BlevelGtScheduler(True), 1),
+    ]
 
+    graphs = [make_graph() for _ in range(5)]
+
+    columns = ["task_graph"]
+    for name, _, _ in schedulers:
+        columns.append(name + "_avg")
+        columns.append(name + "_std")
+    columns.append("min")
+
+    results = []
     for graph in graphs:
-        task_graph = make_graph()
-        results = benchmark_scheduler(task_graph, RandomAssignScheduler, n_workers, 100)
+        data = [graph]
+        mins = []
+        for name, scheduler, count, in schedulers:
+            minimum, average, std = benchmark_scheduler(graph, scheduler, n_workers, count)
+            mins.append(minimum)
+            data.append(average)
+            data.append(std)
+        data.append(min(mins))
+        results.append(data)
 
-        average = np.average(results)
-        minimum = results.min()
-        print(average, minimum, average / minimum)
+    data = pd.DataFrame(results, columns=columns)
+
+    avg_names = [name + "_avg" for name, _, _ in schedulers]
+    for n in avg_names:
+        r = data[n] / data["min"]
+        print(n, r.mean())
+
 
 
 if __name__ == "__main__":

@@ -41,3 +41,6 @@ class TaskGraph:
 
             for t in task.consumers:
                 assert t in self.tasks
+
+    def __repr__(self):
+        return "<TaskGraph #t={}>".format(len(self.tasks))
