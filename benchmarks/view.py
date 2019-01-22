@@ -3,7 +3,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
-
+import multiprocessing
 
 class Data:
 
@@ -34,6 +34,7 @@ def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim
     g = sns.FacetGrid(data, col=col, row=row, sharey=sharey, sharex=sharex, margin_titles=True)
     if ylim is not None:
         g.set(ylim=ylim)
+
     def draw(**kw):
         data = kw["data"]
         #data["min_sched_interval"] = data["min_sched_interval"].astype(str)
@@ -46,7 +47,9 @@ def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim
         ax = sns.lineplot(data=data, x=x, y=y, hue=hue, hue_order=hue_order, style=style, legend="full", ci=None)
         ax.set(xscale="log")
     g.map_dataframe(draw).add_legend()
-
+    for ax in g.axes.flat:
+        plt.setp(ax.texts, text="")
+    g.set_titles(row_template="{row_name}", col_template="{col_name}", size = 15)
 
 
 def process(name):
@@ -56,22 +59,32 @@ def process(name):
     # ----- Schedulers -----
     dataset = data.prepare()
 
-    splot(dataset, "graph_name", "cluster_name", x="bandwidth", y="score", hue="scheduler_name", sharey=False, ylim=(1, 3))
+    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", hue="scheduler_name", sharey=False, ylim=(1, 3))
     plt.savefig("outputs/" + name + "-schedulers-score.png")
 
-    splot(dataset, "graph_name", "cluster_name", x="bandwidth", y="time", hue="scheduler_name", style=None, sharey=False)
+    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", hue="scheduler_name", style=None, sharey=False)
     plt.savefig("outputs/" + name + "-schedulers-time.png")
 
     # ----- Netmodel -----
-    dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
+    #dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
 
-    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="netmodel", sharey=False)
-    plt.savefig("outputs" + name + "-16x4-netmodel-score.png")
+    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="netmodel", sharey=False)
+    #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
+    return name
 
-process("pegasus")
+if not os.path.isdir("outputs"):
+    os.mkdir("outputs")
+
+names = ["pegasus", "elementary", "irw"]
+
+pool = multiprocessing.Pool()
+for name in pool.imap(process, names):
+    print("finished", name)
+
+#process("pegasus")
 #process("rg")
-process("elementary")
-process("irw")
+#process("elementary")
+#process("irw")
 
 
 
