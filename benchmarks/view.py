@@ -5,6 +5,26 @@ import seaborn as sns
 import os
 import multiprocessing
 import itertools
+import matplotlib.patches as mpatches    
+from matplotlib.lines import Line2D
+
+LINE_STYLES = ["-", ":", "-.", "--"]
+cmap = plt.cm.get_cmap('Dark2')
+COLORS = [cmap(i) for i in range(5)]
+MARKERS = ["o", "v", "^", "<", ">", "1", "2", "3", "4", "8", "s", "+", "x", "D"]
+
+
+def style_gen():
+    for line, color, marker in zip(
+            itertools.cycle(LINE_STYLES),
+            itertools.cycle(COLORS),
+            itertools.cycle(MARKERS)):
+        yield {
+            "line": line,
+            "color": color,
+            "marker": marker
+        }
+
 
 class Data:
 
@@ -18,7 +38,6 @@ class Data:
 
         mins = self.raw_data.groupby(["graph_id", "cluster_name", "bandwidth", "netmodel"])["time"].transform(pd.Series.min)
         self.raw_data["score"] = self.raw_data["time"] / mins
-
 
     def prepare(self,
                 cluster_name=None,
@@ -46,7 +65,7 @@ class Data:
         return pd.DataFrame(rd[f])
 
 
-def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim=None):
+def splot(data, col, row, x, y, style_col=None, sharex=False, sharey=True, ylim=None, style_values=None):
     """
     g = sns.FacetGrid(data, col=col, row=row, sharey=sharey, sharex=sharex, margin_titles=True)
     if ylim is not None:
@@ -72,40 +91,35 @@ def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim
     g.set_titles(row_template="{row_name}", col_template="{col_name}", size = 2)
     """
 
-    #styles = [
-    #   "red",
-    #    "green",
-    #    "blue",
-    #    "orange",
-    #    "yellow",
-    #    "magenta",
-    #]
-
-    cmap = plt.cm.get_cmap('Dark2')
-    styles = [cmap(i) for i in range(7)]
+    if style_col is None:
+        values = style_values
+    else:
+        values = sorted(data[style_col].unique())
 
     def draw(gdata, ax):
         ax.set_xscale("log", nonposx='clip')
-
-        for (name, values), style in zip(gdata.groupby(hue), itertools.cycle(styles)):
-            ax.plot(values[x], values[y], 'ro', markersize=2, color=style)
-            means = values.groupby(x)[y].mean()
-            ax.plot(means.index, means, '-', color=style)
+        if ylim is not None:
+            ax.set(ylim=ylim)        
+        for v, style in zip(values, style_gen()):
+            fdata = gdata[gdata[style_col] == v]
+            ax.plot(fdata[x], fdata[y], 'ro', markersize=5, color=style["color"], marker=style["marker"])
+            means = fdata.groupby(x)[y].mean()
+            ax.plot(means.index, means, linestyle=style["line"], color=style["color"])
 
     rows = sorted(data[row].unique())
     cols = sorted(data[col].unique())
-    idata = pd.DataFrame(data)
-    idata.set_index([col, row], inplace=True)
+    idata = data.copy()
+    idata.set_index([idata[col], idata[row]], inplace=True)
     idata.sort_index(inplace=True)
-    fig, axes = plt.subplots(nrows=len(rows), ncols=len(cols), figsize=(len(rows) * 3, len(cols) * 4))
+    fig, axes = plt.subplots(nrows=len(rows),
+                             ncols=len(cols),
+                             figsize=(len(cols) * 4 + 1, len(rows) * 4))
 
     for ax, col in zip(axes[0], cols):
         ax.set_title(col)
 
-    for ax, row in zip(axes[:,0], rows):
+    for ax, row in zip(axes[:, 0], rows):
         ax.set_ylabel(row, size='large')
-
-    fig.legend(styles, idata[hue].unique())
 
     for i, c in enumerate(cols):
         for j, r in enumerate(rows):
@@ -115,7 +129,11 @@ def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim
                 ax = axes[j, i]
                 draw(gdata, ax)
 
-
+    fig.legend(handles=[Line2D([], [], color=style["color"], label=v, linestyle=style["line"], marker=style["marker"])
+                        for v, style in zip(values, style_gen())],
+               ncol=3,
+               loc=3,
+               mode="expand", borderaxespad=0., numpoints=1)
 
 
 def process(name):
@@ -123,30 +141,46 @@ def process(name):
     data = Data("../results/" + name + ".zip")
 
     # ----- Schedulers -----
-    dataset = data.prepare()
+    #dataset = data.prepare()
 
-    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", hue="scheduler_name", sharey=False, ylim=(1, 3))
+    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", style_col="scheduler_name", ylim=(1, 3))
     #plt.savefig("outputs/" + name + "-schedulers-score.png")
 
-    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", hue="scheduler_name", style=None, sharey=False)
-    plt.savefig("outputs/" + name + "-schedulers-time.png")
+    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", style_col="scheduler_name", sharey=False)
+    #plt.savefig("outputs/" + name + "-schedulers-time.png")
 
     # ----- Netmodel -----
-    dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
+    #dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
 
-    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="netmodel", sharey=False)
+    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="netmodel", sharey=False)
     #plt.savefig("outputs/" + name + "-16x4-netmodel-time.png")
 
     #groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "netmodel"])
     #means = groups["time"].mean().unstack().dropna()
     #score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
-    #splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", hue=None, sharey=False)
+    #score["netmodel"] = "minmax"
+    #splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
     #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
 
     # ----- MinSchedTime
-    #dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
-    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="min_sched_interval", style="min_sched_interval", sharey=False)
+    dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
+    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="min_sched_interval", sharey=False)
     #plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
+
+    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "min_sched_interval"])    
+    dataset["norms"] = groups['time'].transform(lambda x: x/x.sum())
+    #dataset["norms"] = dataset["time"] / groups["time"].mean()
+    #means = groups["time"].mean().unstack().dropna()
+    #normalizer = means[0.1]
+    # (0.0, 0.1, 0.4, 1.6, 6.4)
+    #for x in keys:
+    #    means[x] /= normalizer
+    #means[keys] /= normalizer
+    print(dataset["norms"])
+    #score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
+    #score["netmodel"] = "minmax"
+    #splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
+    #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
 
     #print(dataset)
 
