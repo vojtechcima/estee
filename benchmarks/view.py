@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import multiprocessing
+import itertools
 
 class Data:
 
@@ -13,8 +14,11 @@ class Data:
         #self.raw_data["min_sched_interval"] = self.raw_data["min_sched_interval"].apply(lambda x: str(x))
         #print(self.raw_data["min_sched_interval"].map(lambda x: "x" + str(x)))
         #print(self.raw_data["min_sched_interval"].unique())
+        self.raw_data.drop("graph_set", axis=1, inplace=True)
+
         mins = self.raw_data.groupby(["graph_id", "cluster_name", "bandwidth", "netmodel"])["time"].transform(pd.Series.min)
         self.raw_data["score"] = self.raw_data["time"] / mins
+
 
     def prepare(self,
                 cluster_name=None,
@@ -67,15 +71,49 @@ def splot(data, col, row, x, y, hue, style=None, sharex=False, sharey=True, ylim
         plt.setp(ax.texts, text="")
     g.set_titles(row_template="{row_name}", col_template="{col_name}", size = 2)
     """
-    rows = sorted(data[col].unique())
-    cols = sorted(data[row].unique())
-    idata = pd.DataFrame(data, index=[col, row])
+
+    #styles = [
+    #   "red",
+    #    "green",
+    #    "blue",
+    #    "orange",
+    #    "yellow",
+    #    "magenta",
+    #]
+
+    cmap = plt.cm.get_cmap('Dark2')
+    styles = [cmap(i) for i in range(7)]
+
+    def draw(gdata, ax):
+        ax.set_xscale("log", nonposx='clip')
+
+        for (name, values), style in zip(gdata.groupby(hue), itertools.cycle(styles)):
+            ax.plot(values[x], values[y], 'ro', markersize=2, color=style)
+            means = values.groupby(x)[y].mean()
+            ax.plot(means.index, means, '-', color=style)
+
+    rows = sorted(data[row].unique())
+    cols = sorted(data[col].unique())
+    idata = pd.DataFrame(data)
     idata.set_index([col, row], inplace=True)
-    fig, axes = plt.subplots(nrows=len(rows), ncols=len(cols), figsize=(len(rows), len(cols)))
+    idata.sort_index(inplace=True)
+    fig, axes = plt.subplots(nrows=len(rows), ncols=len(cols), figsize=(len(rows) * 3, len(cols) * 4))
+
+    for ax, col in zip(axes[0], cols):
+        ax.set_title(col)
+
+    for ax, row in zip(axes[:,0], rows):
+        ax.set_ylabel(row, size='large')
+
+    fig.legend(styles, idata[hue].unique())
+
     for i, c in enumerate(cols):
         for j, r in enumerate(rows):
-            gdata = idata.loc[(c, r)]
-            print(gdata)
+            idx = (c, r)
+            if idx in idata.index:
+                gdata = idata.loc[idx]
+                ax = axes[j, i]
+                draw(gdata, ax)
 
 
 
@@ -85,13 +123,13 @@ def process(name):
     data = Data("../results/" + name + ".zip")
 
     # ----- Schedulers -----
-    #dataset = data.prepare()
+    dataset = data.prepare()
 
     #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", hue="scheduler_name", sharey=False, ylim=(1, 3))
     #plt.savefig("outputs/" + name + "-schedulers-score.png")
 
-    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", hue="scheduler_name", style=None, sharey=False)
-    #plt.savefig("outputs/" + name + "-schedulers-time.png")
+    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", hue="scheduler_name", style=None, sharey=False)
+    plt.savefig("outputs/" + name + "-schedulers-time.png")
 
     # ----- Netmodel -----
     dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
@@ -106,9 +144,9 @@ def process(name):
     #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
 
     # ----- MinSchedTime
-    dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
-    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="min_sched_interval", style="min_sched_interval", sharey=False)
-    plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
+    #dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
+    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", hue="min_sched_interval", style="min_sched_interval", sharey=False)
+    #plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
 
     #print(dataset)
 
