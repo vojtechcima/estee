@@ -141,37 +141,42 @@ def splot(data, col, row, x, y, style_col=None, sharex=False, sharey=True, ylim=
                mode="expand", borderaxespad=0., numpoints=1)
 
 
+def savefig(name):
+    plt.savefig("outputs/" + name + ".pdf", bbox_inches='tight')    
+
+
 def process(name):
     print("processing " + name)
     data = Data("../results/" + name + ".zip")
-
-    """
+    
     # ----- Schedulers -----
     dataset = data.prepare()
 
     splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", style_col="scheduler_name", ylim=(1, 3))
-    plt.savefig("outputs/" + name + "-schedulers-score.png")
+    savefig(name + "-schedulers-score")
 
     splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", style_col="scheduler_name", sharey=False)
-    plt.savefig("outputs/" + name + "-schedulers-time.png")
+    savefig(name + "-schedulers-time")
 
     # ----- Netmodel -----
     dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
 
     splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="netmodel", sharey=False)
-    plt.savefig("outputs/" + name + "-16x4-netmodel-time.png")
+    savefig(name + "-16x4-netmodel-time")
 
-    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "netmodel"])
-    means = groups["time"].mean().unstack().dropna()
-    score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
-    score["netmodel"] = "minmax"
-    splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
-    plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
+    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
+    def normalize(x):
+        mean = x[x["netmodel"] == "simple"]["time"].mean()
+        x["time"] /= mean
+        return x
+    dataset["norms"] = groups.apply(normalize)["time"]
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="netmodel")
+    savefig(name + "-16x4-netmodel-score")
 
     # ----- MinSchedTime
     dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
     splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="min_sched_interval", sharey=False)
-    plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
+    savefig(name + "-16x4-schedtime-time")
 
     groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
     def normalize(x):
@@ -180,23 +185,22 @@ def process(name):
         return x
     dataset["norms"] = groups.apply(normalize)["time"]
     splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="min_sched_interval")
-    plt.savefig("outputs/" + name + "-16x4-schedtime-score.png")
-    """
+    savefig(name + "-16x4-schedtime-score")
+
 
     # ----- Imodes
     dataset = data.prepare(cluster_name="16x4", exclude_single=True, imode=None)
     splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="imode", sharey=False)
-    plt.savefig("outputs/" + name + "-16x4-imode-time.png")
+    savefig(name + "-16x4-imode-time")
 
-    #groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
-    #def normalize_imode(x):
-    #    mean = x[x["min_sched_interval"] == 0.0]["time"].mean()
-    #    x["time"] /= mean
-    #    return x
-    #dataset["norms"] = groups.apply(normalize_imode)["time"]
-    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="min_sched_interval")
-    #plt.savefig("outputs/" + name + "-16x4-schedtime-score.png")
-
+    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
+    def normalize_imode(x):
+        mean = x[x["imode"] == "exact"]["time"].mean()
+        x["time"] /= mean
+        return x
+    dataset["norms_imode"] = groups.apply(normalize_imode)["time"]
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms_imode", sharey=False, style_col="imode")
+    savefig(name + "-16x4-imode-score")
     return name
 
 
@@ -210,10 +214,9 @@ if not os.path.isdir("outputs"):
 #for name in pool.imap(process, names):
 #    print("finished", name)
 
-#process("pegasus")
-#process("elementary")
+process("pegasus")
+process("elementary")
 process("irw")
-
 
 
 #plt.show()
