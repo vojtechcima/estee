@@ -43,7 +43,8 @@ class Data:
                 cluster_name=None,
                 exclude_single=False,
                 netmodel="minmax",
-                min_sched_interval=0.1):
+                min_sched_interval=0.1,
+                imode="exact"):
         rd = self.raw_data
 
         if netmodel:
@@ -56,7 +57,11 @@ class Data:
         else:
             f &= rd["min_sched_interval"].isin([0.0, 0.1, 0.4, 1.6, 6.4])
 
-        f &= rd["imode"] == "exact"
+        if imode is not None:
+            f &= rd["imode"] == imode
+        else:
+            f &= rd["imode"].isin(["exact", "mean", "user"])
+
         #f &= rd["scheduler_name"].isin(["blevel", "random-gt", "genetic"])
         if cluster_name:
             f &= rd["cluster_name"] == cluster_name
@@ -140,6 +145,7 @@ def process(name):
     print("processing " + name)
     data = Data("../results/" + name + ".zip")
 
+    """
     # ----- Schedulers -----
     dataset = data.prepare()
 
@@ -175,6 +181,22 @@ def process(name):
     dataset["norms"] = groups.apply(normalize)["time"]
     splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="min_sched_interval")
     plt.savefig("outputs/" + name + "-16x4-schedtime-score.png")
+    """
+
+    # ----- Imodes
+    dataset = data.prepare(cluster_name="16x4", exclude_single=True, imode=None)
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="imode", sharey=False)
+    plt.savefig("outputs/" + name + "-16x4-imode-time.png")
+
+    #groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
+    #def normalize_imode(x):
+    #    mean = x[x["min_sched_interval"] == 0.0]["time"].mean()
+    #    x["time"] /= mean
+    #    return x
+    #dataset["norms"] = groups.apply(normalize_imode)["time"]
+    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="min_sched_interval")
+    #plt.savefig("outputs/" + name + "-16x4-schedtime-score.png")
+
     return name
 
 
@@ -188,8 +210,8 @@ if not os.path.isdir("outputs"):
 #for name in pool.imap(process, names):
 #    print("finished", name)
 
-process("pegasus")
-process("elementary")
+#process("pegasus")
+#process("elementary")
 process("irw")
 
 
