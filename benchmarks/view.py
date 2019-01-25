@@ -5,7 +5,7 @@ import seaborn as sns
 import os
 import multiprocessing
 import itertools
-import matplotlib.patches as mpatches    
+import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 
 LINE_STYLES = ["-", ":", "-.", "--"]
@@ -99,7 +99,7 @@ def splot(data, col, row, x, y, style_col=None, sharex=False, sharey=True, ylim=
     def draw(gdata, ax):
         ax.set_xscale("log", nonposx='clip')
         if ylim is not None:
-            ax.set(ylim=ylim)        
+            ax.set(ylim=ylim)
         for v, style in zip(values, style_gen()):
             fdata = gdata[gdata[style_col] == v]
             ax.plot(fdata[x], fdata[y], 'ro', markersize=5, color=style["color"], marker=style["marker"])
@@ -141,65 +141,55 @@ def process(name):
     data = Data("../results/" + name + ".zip")
 
     # ----- Schedulers -----
-    #dataset = data.prepare()
+    dataset = data.prepare()
 
-    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", style_col="scheduler_name", ylim=(1, 3))
-    #plt.savefig("outputs/" + name + "-schedulers-score.png")
+    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="score", style_col="scheduler_name", ylim=(1, 3))
+    plt.savefig("outputs/" + name + "-schedulers-score.png")
 
-    #splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", style_col="scheduler_name", sharey=False)
-    #plt.savefig("outputs/" + name + "-schedulers-time.png")
+    splot(dataset, "cluster_name", "graph_name", x="bandwidth", y="time", style_col="scheduler_name", sharey=False)
+    plt.savefig("outputs/" + name + "-schedulers-time.png")
 
     # ----- Netmodel -----
-    #dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
+    dataset = data.prepare(cluster_name="16x4", netmodel=None, exclude_single=True)
 
-    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="netmodel", sharey=False)
-    #plt.savefig("outputs/" + name + "-16x4-netmodel-time.png")
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="netmodel", sharey=False)
+    plt.savefig("outputs/" + name + "-16x4-netmodel-time.png")
 
-    #groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "netmodel"])
-    #means = groups["time"].mean().unstack().dropna()
-    #score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
-    #score["netmodel"] = "minmax"
-    #splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
-    #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
+    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "netmodel"])
+    means = groups["time"].mean().unstack().dropna()
+    score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
+    score["netmodel"] = "minmax"
+    splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
+    plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
 
     # ----- MinSchedTime
     dataset = data.prepare(cluster_name="16x4", min_sched_interval=None, exclude_single=True)
-    #splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="min_sched_interval", sharey=False)
-    #plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="time", style_col="min_sched_interval", sharey=False)
+    plt.savefig("outputs/" + name + "-16x4-schedtime-time.png")
 
-    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name", "min_sched_interval"])    
-    dataset["norms"] = groups['time'].transform(lambda x: x/x.sum())
-    #dataset["norms"] = dataset["time"] / groups["time"].mean()
-    #means = groups["time"].mean().unstack().dropna()
-    #normalizer = means[0.1]
-    # (0.0, 0.1, 0.4, 1.6, 6.4)
-    #for x in keys:
-    #    means[x] /= normalizer
-    #means[keys] /= normalizer
-    print(dataset["norms"])
-    #score = pd.DataFrame((means["minmax"] / means["simple"]), columns=["score"]).reset_index()
-    #score["netmodel"] = "minmax"
-    #splot(score, "graph_name", "scheduler_name", x="bandwidth", y="score", sharey=False, style_col="netmodel")
-    #plt.savefig("outputs/" + name + "-16x4-netmodel-score.png")
-
-    #print(dataset)
-
+    groups = dataset.groupby(["graph_name", "graph_id", "cluster_name", "bandwidth", "scheduler_name"])
+    def normalize(x):
+        mean = x[x["min_sched_interval"] == 0.0]["time"].mean()
+        x["time"] /= mean
+        return x
+    dataset["norms"] = groups.apply(normalize)["time"]
+    splot(dataset, "graph_name", "scheduler_name", x="bandwidth", y="norms", sharey=False, style_col="min_sched_interval")
+    plt.savefig("outputs/" + name + "-16x4-schedtime-score.png")
     return name
 
 
 if not os.path.isdir("outputs"):
     os.mkdir("outputs")
 
-"""
-names = ["pegasus", "elementary", "irw"]
 
-pool = multiprocessing.Pool()
-for name in pool.imap(process, names):
-    print("finished", name)
-"""
-#process("pegasus")
-#process("rg")
-#process("elementary")
+#names = ["pegasus", "elementary", "irw"]
+
+#pool = multiprocessing.Pool()
+#for name in pool.imap(process, names):
+#    print("finished", name)
+
+process("pegasus")
+process("elementary")
 process("irw")
 
 
